@@ -1,4 +1,0 @@
-/**
- * EventSpine — Usage Examples
- */
-export {};
