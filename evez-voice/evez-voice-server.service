@@ -1,0 +1,15 @@
+[Unit]
+Description=EVEZ XTTS-v2 Voice Server
+After=network.target
+
+[Service]
+Type=simple
+User=openclaw
+WorkingDirectory=/home/openclaw/.openclaw/workspace
+ExecStart=/home/openclaw/.openclaw/workspace/voice-venv/bin/python3 /home/openclaw/.openclaw/workspace/evez-voice/evez-voice-server.py --port 5000
+Restart=always
+RestartSec=10
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=default.target
