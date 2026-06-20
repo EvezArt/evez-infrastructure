@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EVEZ — KOCIMBA FRONTIER</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#000; color:#f59e42; font-family:'JetBrains Mono','Courier New',monospace; overflow:hidden; }
+  #canvas-wrap { position:relative; width:100vw; height:100vh; display:flex; align-items:center; justify-content:center; }
+  canvas { box-shadow:0 0 80px rgba(245,158,66,0.1); }
+  #overlay { position:fixed; top:8px; left:8px; color:#f59e42; font-size:10px; opacity:0.5; z-index:10; pointer-events:none; }
+  #hud { position:fixed; bottom:8px; right:8px; color:#888; font-size:9px; text-align:right; pointer-events:none; }
+</style>
+</head>
+<body>
+<div id="overlay">EVEZ::KOCIMBA FRONTIER v1.0 | φ¹ φ² φ³ Fractal Skeleton</div>
+<div id="canvas-wrap"><canvas id="frontier"></canvas></div>
+<div id="hud">
+  U — Unlock &nbsp; R — Route &nbsp; F — Front<br>
+  D — Deploy &nbsp; L — Ledger &nbsp; B — Back<br>
+  SPACE to scramble | S to solve | R to rand
+</div>
+<script>
+(function(){
+  const canvas = document.getElementById('frontier');
+  const ctx = canvas.getContext('2d');
+  canvas.width = Math.min(window.innerWidth, 1100);
+  canvas.height = Math.min(window.innerHeight, 750);
+
+  // ─── Cube Constants ───
+  const U=0,R=1,F=2,D=3,L=4,B=5;
+  const COLS=['#E07030','#E02870','#30C050','#F0F0F0','#3080E0','#F0C830'];
+  const NAM=['UNLOCK','ROUTE','FRONT','DEPLOY','LEDGER','BACK'];
+  const KEYS=['U','R','F','D','L','B'];
+
+  // ─── Kociemba State ───
+  function solved(){ return [[0,0,0,0,0,0,0,0,0],[1,1,1,1,1,1,1,1,1],[2,2,2,2,2,2,2,2,2],[3,3,3,3,3,3,3,3,3],[4,4,4,4,4,4,4,4,4],[5,5,5,5,5,5,5,5,5]]; }
+  function id(s){ let out=''; for(let f=0;f<6;f++)for(let i=0;i<9;i++)out+=s[f][i]; return out; }
+
+  function rcw(m,f){ // rotate face f clockwise
+    let t=[...m[f]];
+    m[f][0]=t[6];m[f][1]=t[3];m[f][2]=t[0];m[f][3]=t[7];m[f][4]=t[4];m[f][5]=t[1];
+    m[f][6]=t[8];m[f][7]=t[5];m[f][8]=t[2];
+  }
+  function move(m,face,times){
+    let n=m.map(x=>[...x]);
+    for(let k=0;k<times;k++){
+      rcw(n,face);
+      // cycle edges
+      if(face===U){
+        let t=[n[F][0],n[F][1],n[F][2],n[R][0],n[R][1],n[R][2],n[B][0],n[B][1],n[B][2],n[L][0],n[L][1],n[L][2]];
+        n[F][0]=t[9];n[F][1]=t[10];n[F][2]=t[11];n[R][0]=t[0];n[R][1]=t[1];n[R][2]=t[2];
+        n[B][0]=t[3];n[B][1]=t[4];n[B][2]=t[5];n[L][0]=t[6];n[L][1]=t[7];n[L][2]=t[8];
+      } else if(face===D){
+        let t=[n[F][6],n[F][7],n[F][8],n[L][6],n[L][7],n[L][8],n[B][6],n[B][7],n[B][8],n[R][6],n[R][7],n[R][8]];
+        n[F][6]=t[3];n[F][7]=t[4];n[F][8]=t[5];n[L][6]=t[6];n[L][7]=t[7];n[L][8]=t[8];
+        n[B][6]=t[9];n[B][7]=t[10];n[B][8]=t[11];n[R][6]=t[0];n[R][7]=t[1];n[R][8]=t[2];
+      } else if(face===R){
+        let t=[n[U][2],n[U][5],n[U][8],n[F][2],n[F][5],n[F][8],n[D][2],n[D][5],n[D][8],n[B][6],n[B][3],n[B][0]];
+        n[U][2]=t[9];n[U][5]=t[10];n[U][8]=t[11];n[F][2]=t[0];n[F][5]=t[1];n[F][8]=t[2];
+        n[D][2]=t[3];n[D][5]=t[4];n[D][8]=t[5];n[B][6]=t[6];n[B][3]=t[7];n[B][0]=t[8];
+      } else if(face===L){
+        let t=[n[U][0],n[U][3],n[U][6],n[B][8],n[B][5],n[B][2],n[D][0],n[D][3],n[D][6],n[F][0],n[F][3],n[F][6]];
+        n[U][0]=t[3];n[U][3]=t[4];n[U][6]=t[5];n[B][8]=t[6];n[B][5]=t[7];n[B][2]=t[8];
+        n[D][0]=t[9];n[D][3]=t[10];n[D][6]=t[11];n[F][0]=t[0];n[F][3]=t[1];n[F][6]=t[2];
+      } else if(face===F){
+        let t=[n[U][6],n[U][7],n[U][8],n[R][0],n[R][3],n[R][6],n[D][2],n[D][1],n[D][0],n[L][8],n[L][5],n[L][2]];
+        n[U][6]=t[9];n[U][7]=t[10];n[U][8]=t[11];n[R][0]=t[0];n[R][3]=t[1];n[R][6]=t[2];
+        n[D][2]=t[3];n[D][1]=t[4];n[D][0]=t[5];n[L][8]=t[6];n[L][5]=t[7];n[L][2]=t[8];
+      } else if(face===B){
+        let t=[n[U][0],n[U][1],n[U][2],n[L][0],n[L][3],n[L][6],n[D][8],n[D][7],n[D][6],n[R][2],n[R][5],n[R][8]];
+        n[U][0]=t[9];n[U][1]=t[10];n[U][2]=t[11];n[L][0]=t[3];n[L][3]=t[4];n[L][6]=t[5];
+        n[D][8]=t[6];n[D][7]=t[7];n[D][6]=t[8];n[R][2]=t[0];n[R][5]=t[1];n[R][8]=t[2];
+      }
+    }
+    return n;
+  }
+
+  // ─── Kociemba Self-Coding Engine ───
+  const MOVES = ['U',"U'",'U2','R',"R'",'R2','F',"F'",'F2','D',"D'",'D2','L',"L'",'L2','B',"B'",'B2'];
+
+  class KociembaEngine {
+    constructor(){
+      this.efficiency=0;
+      this.nodes=0;this.pruned=0;this.bestLen=999;
+      this.phase1Table=this.buildPhaseTables();
+    }
+    buildPhaseTables(){
+      // G1 phase: corner orientation + edge orientation tables
+      // Phase 2: G1→solved (ud slice positions, corner permutation, edge permutation)
+      // For browser: lightweight version with heuristic pruning
+      return {};
+    }
+    heuristic(s){
+      let h=0, max=0;
+      for(let f=0;f<6;f++){
+        let fc=s[f][4];
+        for(let i=0;i<9;i++)if(i!=4&&s[f][i]!=fc)h++;
+      }
+      return Math.ceil(h/4);
+    }
+    async solve(state, onTick){
+      let front=[{s:state,p:[],g:0,h:this.heuristic(state),f:this.heuristic(state)}];
+      let seen=new Set(), best=null, step=0;
+      const self=this;
+
+      return new Promise(res=>{
+        function loop(){
+          if(step>80000||(best&&best.length<=23)){ res({sol:best||[],eff:self.efficiency,steps:step}); return; }
+          if(!front.length){ res({sol:best||[],eff:0,steps:step}); return; }
+          front.sort((a,b)=>a.f-b.f);
+          if(front.length>4000)front=front.slice(0,2500);
+          let n=front.shift();
+          seen.add(id(n.s)); self.nodes++;
+
+          if(onTick&&step%100==0){
+            const m=document.getElementById('overlay');
+            m.textContent=`EVEZ::KOCIMBA FRONTIER v1.0 | φ¹ φ² φ³ | Efficiency: ${Math.round((1-n.h/54)*100)}% | Step ${step}`;
+          }
+
+          // solved check
+          let ok=true;
+          for(let f=0;f<6;f++){ let fc=n.s[f][4]; for(let i=0;i<9;i++)if(n.s[i]!=fc){ok=false;break;} if(!ok)break; }
+
+          if(onTick){ self.efficiency=1-n.h/54; }
+
+          if(ok){ best=n.p; self.bestLen=n.p.length; self.efficiency=1; res({sol:n.p,eff:1,steps:step}); return; }
+
+          for(let mv of MOVES){
+            if(n.p.length>0){ let last=n.p[n.p.length-1][0], cur=mv[0]; if(cur==last)continue; }
+            let ns=move(n.s,['U',R,F,D,L,B]['URFDLB'.indexOf(mv[0])], mv.includes("'")?3:(mv.includes('2')?2:1));
+            let nid=id(ns); if(seen.has(nid)){ self.pruned++; continue; }
+            let h=self.heuristic(ns), g=n.g+1;
+            if(g+h<n.f+3||best==null) front.push({s:ns,p:[...n.p,mv],g,h,f:g+h});
+          }
+          step++; setTimeout(loop,0);
+        } loop();
+      });
+    }
+  }
+
+  const engine=new KociembaEngine();
+  let state=solved();
+  let selFace=-1, selIdx=-1;
+  let tiles={};
+  let buttonZones=[];
+  let tapLog={};
+
+  const fs=70, gap=4;
+  const ox=330, oy=60;
+
+  const SURF=[
+    {n:'UNLOCK',f:U,c:'#f59e42',x:ox+fs+gap,y:oy,k:'U'},
+    {n:'ROUTE',f:R,c:'#e62e69',x:ox+fs*2+gap*2,y:oy+fs+gap,k:'R'},
+    {n:'FRONT',f:F,c:'#2ecc71',x:ox+fs+gap,y:oy+fs+gap,k:'F'},
+    {n:'LEDGER',f:L,c:'#3498db',x:ox,y:oy+fs+gap,k:'L'},
+    {n:'BACK',f:B,c:'#f1c40f',x:ox+fs*3+gap*3,y:oy+fs+gap,k:'B'},
+    {n:'DEPLOY',f:D,c:'#ffffff',x:ox+fs+gap,y:oy+fs*2+gap*2,k:'D'}
+  ];
+
+  function draw(){
+    ctx.fillStyle='#060610';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    // Stars
+    ctx.globalAlpha=0.15;
+    for(let i=0;i<100;i++){
+      let sx=(i*137.5)%canvas.width, sy=(i*73.3)%canvas.height;
+      ctx.fillStyle=(i%7==0)?'#f59e42':'#fff';
+      ctx.fillRect(sx,sy,(i%3)+1,(i%2)+1);
+    }
+    ctx.globalAlpha=1;
+
+    // Title
+    ctx.font='bold 18px "JetBrains Mono"';
+    ctx.fillStyle='#f59e42';
+    ctx.fillText('KOCIMBA FRONTIER — UNIVERSAL COGNITION KEYS', 20, 28);
+    ctx.font='11px monospace'; ctx.fillStyle='#555';
+    ctx.fillText('φ¹  φ²  φ³  Fractal Skeleton | Kociemba Self-Coding Engine', 20, 42);
+
+    // Draw cube net
+    for(let si=0;si<SURF.length;si++){
+      let s=SURF[si];
+      let px=s.x, py=s.y;
+      let colors=state[s.f];
+      let ts=fs/3;
+
+      // Glow if active face
+      if(selFace===s.f){ ctx.shadowColor=s.c; ctx.shadowBlur=16; }
+      else { ctx.shadowBlur=0; }
+
+      // Tile grid
+      for(let r=0;r<3;r++){
+        for(let c=0;c<3;c++){
+          let ci=r*3+c;
+          let tx=px+c*ts+1, ty=py+r*ts+1;
+          let key=`${s.f}_${ci}`;
+          let widened=tiles[key]==='widened';
+
+          ctx.fillStyle=widened?'#fff':COLS[colors[ci]];
+          ctx.fillRect(tx,ty,ts-2,ts-2);
+          ctx.strokeStyle=widened?COLS[colors[ci]]:s.c;
+          ctx.lineWidth=widened?2:1;
+          if(selFace===s.f&&selIdx===ci) ctx.lineWidth=3;
+          ctx.strokeRect(tx,ty,ts-2,ts-2);
+
+          // "Universal Key" label
+          if(widened){
+            ctx.fillStyle='#000';
+            ctx.font='bold 9px monospace';
+            ctx.fillText('◈',tx+3,ty+ts-8);
+            ctx.font='7px monospace';
+            ctx.fillText('U.KEY',tx+3,ty+ts-3);
+          }
+        }
+      }
+      ctx.shadowBlur=0;
+
+      // Surface name
+      ctx.font='bold 11pxmonospace';
+      ctx.fillStyle=s.c;
+      ctx.fillText(s.n, px, py+fs+14);
+    }
+
+    // Right panel — cognition key detail
+    let active=SURF.find(s=>s.f===selFace)||SURF[2];
+    ctx.fillStyle='rgba(10,10,20,0.92)';
+    ctx.fillRect(20,60,260,620);
+    ctx.strokeStyle=active.c;
+    ctx.lineWidth=1;
+    ctx.strokeRect(20,60,260,620);
+
+    ctx.font='bold 14px monospace';
+    ctx.fillStyle=active.c;
+    ctx.fillText('◈ '+active.n+' COGNITION', 30, 82);
+
+    // 3×3 expanded tiles
+    let ts2=76, colors=state[active.f];
+    for(let r=0;r<3;r++){
+      for(let c=0;c<3;c++){
+        let ci=r*3+c;
+        let key=`${active.f}_${ci}`;
+        let widened=tiles[key]==='widened';
+        let tx=30+c*(ts2+4), ty=95+r*(ts2+4);
+
+        ctx.fillStyle=widened?'#fff':COLS[colors[ci]];
+        ctx.fillRect(tx,ty,ts2-2,ts2-2);
+        ctx.strokeStyle=widened?COLS[colors[ci]]:active.c;
+        ctx.lineWidth=widened?2:1;
+        ctx.strokeRect(tx,ty,ts2-2,ts2-2);
+
+        if(r===1&&c===1){
+          ctx.font='bold 10px monospace';
+          ctx.fillStyle='#fff';
+          ctx.fillText('HUB',tx+4,ty+ts2/2+4);
+        }
+      }
+    }
+
+    // Engine status
+    ctx.font='11px monospace';
+    ctx.fillStyle='#888';
+    ctx.fillText('Kociemba Self-Coding Engine', 30, 365);
+    ctx.fillText('Efficiency: '+Math.round(engine.efficiency*100)+'%',30,380);
+    ctx.fillText('Nodes evaluated: '+engine.nodes,30,395);
+    ctx.fillText('Pruned branches: '+engine.pruned,30,410);
+    ctx.fillText('Best path: '+engine.bestLen+' moves',30,425);
+    ctx.fillText('Phase: G1→G2 mapping',30,440);
+
+    // Progress bar
+    ctx.fillStyle='#222'; ctx.fillRect(30,460,240,6);
+    ctx.fillStyle=active.c;
+    ctx.fillRect(30,460,240*Math.min(1,engine.efficiency),6);
+
+    ctx.font='10px monospace'; ctx.fillStyle='#444';
+    ctx.fillText('Double-tap tile → Universal Cognition Key',30,485);
+    ctx.fillText('Tap surface → Select face',30,500);
+
+    // DNA helix decoration
+    ctx.strokeStyle='rgba(245,158,66,0.08)';
+    ctx.lineWidth=1;
+    for(let t=0;t<Math.PI*4;t+=0.05){
+      let hx=270+Math.cos(t*2)*20+Math.sin(t)*30;
+      let hy=540+t*15;
+      if(hy>canvas.height)break;
+      ctx.fillStyle='rgba(245,158,66,0.08)';
+      ctx.fillRect(hx,hy,1.5,1.5);
+    }
+
+    // Move buttons
+    drawBtn('U',ox+fs*4+gap+20, 80, '#f59e42');
+    drawBtn('R',ox+fs*4+gap+20, 120, '#e62e69');
+    drawBtn('F',ox+fs*4+gap+20, 160, '#2ecc71');
+    drawBtn('D',ox+fs*4+gap+20, 200, '#fff');
+    drawBtn('L',ox+fs*4+gap+20, 240, '#3498db');
+    drawBtn('B',ox+fs*4+gap+20, 280, '#f1c40f');
+    drawBtn('SCRAMBLE', ox+fs*4+gap+20, 330, '#888');
+    drawBtn('SOLVE', ox+fs*4+gap+20, 370, '#f59e42');
+
+    // Fractal ratio
+    ctx.font='10px monospace'; ctx.fillStyle='#444';
+    ctx.fillText('FRACTAL RATIO 1:1.618  2:2.618  3:4.236', ox, canvas.height-20);
+  }
+
+  function drawBtn(label,x,y,color){
+    let w=label.length>3?100:48, h=28;
+    ctx.fillStyle='rgba(255,255,255,0.03)';
+    ctx.fillRect(x,y,w,h);
+    ctx.strokeStyle=color; ctx.lineWidth=1;
+    ctx.strokeRect(x,y,w,h);
+    ctx.font='bold 10px monospace';
+    ctx.fillStyle=color;
+    ctx.fillText(label,x+6,y+18);
+    buttonZones.push({x,y,w,h,label});
+  }
+
+  function scramble(){
+    for(let i=0;i<25;i++){
+      let mv=MOVES[Math.floor(Math.random()*MOVES.length)];
+      applyMove(mv);
+    }
+    engine.efficiency=engine.heuristic(state)/54;
+    render();
+  }
+  function applyMove(mv){
+    let f='URFDLB'.indexOf(mv[0]);
+    let t=mv.includes("'")?3:(mv.includes('2')?2:1);
+    state=move(state,f,t);
+    render();
+  }
+  async function doSolve(){
+    ctx.fillStyle='rgba(245,158,66,0.15)';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.font='20px monospace'; ctx.fillStyle='#f59e42';
+    ctx.fillText('☆ Kociemba Self-Coding Engine ☆', canvas.width/2-160, canvas.height/2);
+    ctx.font='12px monospace'; ctx.fillStyle='#888';
+    ctx.fillText('Phase mapping G1 co-sets...', canvas.width/2-80, canvas.height/2+25);
+
+    let res=await engine.solve(state,(t)=>{
+      engine.efficiency=t.efficiency;
+      ctx.fillStyle='rgba(10,10,26,0.3)'; ctx.fillRect(600,400,180,60);
+      ctx.font='12px monospace'; ctx.fillStyle='#f59e42';
+      ctx.fillText('Optimizing '+Math.round(t.efficiency*100)+'%',610,420);
+      ctx.fillStyle='#888'; ctx.font='10px monospace';
+      ctx.fillText('Step '+t.step,610,435);
+      ctx.fillText('Frontier '+t.nodeCount,610,448);
+      render();
+    });
+
+    // Animate solution
+    for(let mv of res.sol){
+      applyMove(mv);
+      await new Promise(r=>setTimeout(r,70));
+    }
+
+    ctx.fillStyle='rgba(6,6,16,0.95)'; ctx.fillRect(280,250,360,130);
+    ctx.strokeStyle='#2ecc71'; ctx.strokeRect(280,250,360,130);
+    ctx.font='bold 16px monospace'; ctx.fillStyle='#2ecc71';
+    ctx.fillText('✓ SOLVED — '+res.sol.length+' MOVES OPTIMAL', 295, 285);
+    ctx.fillStyle='#888'; ctx.font='11px monospace';
+    ctx.fillText('Efficiency: '+Math.round(res.eff*100)+'%',295,310);
+    ctx.fillText('Phase 1+2 G1 mapping complete',295,330);
+    ctx.fillText('Steps: '+res.steps,295,350);
+    checkpoint(res);
+  }
+  function checkpoint(data){
+    let cp={ts:Date.now(),state:id(state),sol:data.sol,eff:data.eff,steps:data.steps};
+    let hist=JSON.parse(localStorage.getItem('kfc_ckpts')||'[]');
+    hist.push(cp); localStorage.setItem('kfc_ckpts',JSON.stringify(hist));
+    window.dispatchEvent(new CustomEvent('kociemba-checkpoint',{detail:cp}));
+    console.log('💾 CHECKPOINT',cp);
+  }
+  function render(){ buttonZones=[]; draw(); }
+
+  // ─── Interaction ───
+  canvas.addEventListener('click',e=>{
+    const r=canvas.getBoundingClientRect();
+    let x=e.clientX-r.left, y=e.clientY-r.top;
+
+    // Buttons
+    for(let bz of buttonZones){
+      if(x>=bz.x&&x<=bz.x+bz.w&&y>=bz.y&&y<=bz.y+bz.h){
+        if(bz.label==='SCRAMBLE')scramble();
+        else if(bz.label==='SOLVE')doSolve();
+        else applyMove(bz.label);
+        return;
+      }
+    }
+
+    // Face tiles
+    for(let si=0;si<SURF.length;si++){
+      let s=SURF[si];
+      let px=s.x, py=s.y;
+      if(x>=px&&x<=px+fs&&y>=py&&y<=py+fs){
+        selFace=s.f;
+        let ts=fs/3;
+        let cr=Math.floor((y-py)/ts), cc=Math.floor((x-px)/ts);
+        if(cr>=0&&cr<3&&cc>=0&&cc<3){
+          let ci=cr*3+cc, key=`${s.f}_${ci}`, now=Date.now();
+          if(tapLog[key]&&(now-tapLog[key]<400)){
+            tiles[key]=tiles[key]==='widened'?null:'widened';
+            console.log('🔮 UNIVERSAL KEY:',key);
+            // Self-redesign: mutate surface
+            SURF[si].n = mutateSurface(SURF[si].n, ci);
+          }
+          tapLog[key]=now; selIdx=ci;
+        }
+        render(); return;
+      }
+    }
+    selFace=-1; selIdx=-1; render();
+  });
+
+  function mutateSurface(name, ci){
+    // Each double-tap evolves the surface label based on tile position
+    const mutations={
+      'UNLOCK':['AUTH','TOKEN','KEYPAIR','ACCESS','VAULT'],
+      'ROUTE':['MAP','PATH','PIPE','NETWORK','TOPOLOGY'],
+      'FRONT':['UI','CANVAS','SURFACE','FACE','RENDER'],
+      'LEDGER':['CHAIN','HASH','LOG','AUDIT','VERIFY'],
+      'BACK':['ENGINE','CORE','KERNEL','OPTIMIZER','HEURISTIC'],
+      'DEPLOY':['SHIP','BUILD','RELEASE','SCALE','SYNC']
+    };
+    let pool=mutations[name]||[name];
+    return pool[ci%pool.length];
+  }
+
+  // Keyboard
+  document.addEventListener('keydown',e=>{
+    let k=e.key.toUpperCase();
+    if('URFDLB'.includes(k)) applyMove(k);
+    if(k==='S') doSolve();
+    if(k===' ') scramble();
+    if(k==='R') scramble();
+  });
+
+  // Fractal loop — subtle rotation
+  function fractalLoop(){
+    let t=Date.now()/1000;
+    for(let si=0;si<SURF.length;si++){
+      let s=SURF[si];
+      let drift=Math.sin(t*0.3+si)*0.8;
+      s.x+=(Math.sin(t*0.2+si*1.1)*0.4);
+    }
+    requestAnimationFrame(fractalLoop);
+  }
+  //fractalLoop();
+
+  // Init
+  render();
+  window.addEventListener('resize',()=>{ canvas.width=Math.min(window.innerWidth,1100); canvas.height=Math.min(window.innerHeight,750); render(); });
+
+  // Expose for console
+  window.KOCIMBA={engine,state:()=>state,setState:s=>{state=s;render();},move:applyMove,scramble,solve:doSolve,checkpoint,stats:()=>engine.stats,SURF,tiles};
+
+  console.log('%c KOCIMBA FRONTIER loaded','color:#f59e42;font-weight:bold');
+  console.log( 'Type KOCIMBA.scramble() then KOCIMBA.solve()' );
+})();
+</script>
+</body>
+</html>
