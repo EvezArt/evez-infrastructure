@@ -2,52 +2,69 @@
 """
 EVEZ Voice Synth — Fast pipeline for live Telegram conversations.
 
-Primary: Edge TTS (Microsoft) — ~2s latency, American Western voice
-Fallback: Coqui XTTS-v2 — ~25s, cloned voice (only if EDGE fails)
-
-Voice: en-US-BrianNeural — Casual, approachable, American, slight Western tinge
+Priority:
+1. Local XTTS-v2 server (if running) — ~5s, YOUR cloned voice
+2. Edge TTS (Microsoft) — ~2s, BrianNeural as fallback
+3. XTTS-v2 inline — ~25s, last resort (loads model fresh)
 """
 import sys
 import os
 import subprocess
 import asyncio
+import json
+import urllib.request
 from pathlib import Path
 
 WORKSPACE = Path("/home/openclaw/.openclaw/workspace")
 VENV_PYTHON = str(WORKSPACE / "voice-venv" / "bin" / "python")
 SAMPLE_DIR = WORKSPACE / "evez-voice" / "samples"
-
-# American Western-tinged voices, prioritized
-EDGE_VOICES = [
-    "en-US-BrianNeural",        # Approachable, casual, sincere — Western feel
-    "en-US-AndrewNeural",       # Warm, confident, authentic
-    "en-US-ChristopherNeural",  # Reliable, authority
-    "en-US-EricNeural",         # Rational
-]
+XTTS_SERVER = "http://127.0.0.1:5000"
+EDGE_VOICE = "en-US-BrianNeural"
 
 
-async def edge_tts_synth(text, output_path, voice=None):
-    """Synthesize using Edge TTS — ultra fast, ~2s."""
-    import edge_tts
+def check_xtts_server():
+    """Check if the persistent XTTS server is running."""
+    try:
+        req = urllib.request.Request(f"{XTTS_SERVER}/health", method="GET")
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            data = json.loads(resp.read())
+            return data.get("status") == "ok"
+    except Exception:
+        return False
 
-    voice = voice or EDGE_VOICES[0]
-    communicate = edge_tts.Communicate(text, voice)
 
-    # Write directly to MP3 — no ffmpeg conversion needed
-    await communicate.save(output_path)
-
-    if os.path.exists(output_path) and os.path.getsize(output_path) > 100:
-        return True
+def synth_via_xtts_server(text, output_path):
+    """Synthesize via the persistent XTTS server — ~5s, your cloned voice."""
+    try:
+        payload = json.dumps({"text": text, "output": output_path}).encode()
+        req = urllib.request.Request(
+            f"{XTTS_SERVER}/synthesize",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            data = json.loads(resp.read())
+            if data.get("status") == "ok" and os.path.exists(output_path):
+                return True
+    except Exception as e:
+        print(f"XTTS server failed: {e}", file=sys.stderr)
     return False
 
 
-def xtts_fallback(text, output_path):
-    """Fallback to Coqui XTTS-v2 if Edge TTS fails — ~25s."""
+async def edge_tts_synth(text, output_path):
+    """Synthesize using Edge TTS — ~2s fallback."""
+    import edge_tts
+    communicate = edge_tts.Communicate(text, EDGE_VOICE)
+    await communicate.save(output_path)
+    return os.path.exists(output_path) and os.path.getsize(output_path) > 100
+
+
+def xtts_inline(text, output_path):
+    """Inline XTTS-v2 — ~25s, last resort."""
     samples = list(SAMPLE_DIR.glob("*.wav")) + list(SAMPLE_DIR.glob("*.mp3"))
     if not samples:
         return False
-
-    # Pick longest sample
     best = None
     best_dur = 0
     for f in samples:
@@ -64,25 +81,14 @@ def xtts_fallback(text, output_path):
         except Exception:
             if best is None:
                 best = str(f)
-
     if not best:
         return False
-
     script = f"""
-import sys
 from TTS.api import TTS
 tts = TTS('tts_models/multilingual/multi-dataset/xtts_v2', gpu=False)
-tts.tts_to_file(
-    text={repr(text)},
-    speaker_wav={repr(best)},
-    language='en',
-    file_path={repr(output_path)}
-)
+tts.tts_to_file(text={repr(text)}, speaker_wav={repr(best)}, language='en', file_path={repr(output_path)})
 """
-    result = subprocess.run(
-        [VENV_PYTHON, "-c", script],
-        capture_output=True, text=True, timeout=120
-    )
+    result = subprocess.run([VENV_PYTHON, "-c", script], capture_output=True, text=True, timeout=120)
     return result.returncode == 0 and os.path.exists(output_path)
 
 
@@ -98,24 +104,36 @@ def main():
         print("Empty text", file=sys.stderr)
         sys.exit(1)
 
-    # Ensure output is MP3
     if not output_path.endswith(".mp3"):
         output_path = output_path.rsplit(".", 1)[0] + ".mp3"
 
-    # Try Edge TTS first (fast path)
+    # Priority 1: XTTS-v2 server (your cloned voice, ~8s)
+    if check_xtts_server():
+        mp3_path = output_path  # Server now outputs MP3 directly
+        if synth_via_xtts_server(text, mp3_path):
+            if os.path.exists(mp3_path):
+                sys.exit(0)
+
+    # Priority 2: Edge TTS (fast fallback, ~2s)
     try:
         loop = asyncio.new_event_loop()
         success = loop.run_until_complete(edge_tts_synth(text, output_path))
         loop.close()
         if success:
-            # Overwrite the original output path if caller expected a different extension
             sys.exit(0)
     except Exception as e:
         print(f"Edge TTS failed: {e}", file=sys.stderr)
 
-    # Fallback to XTTS-v2
-    if xtts_fallback(text, output_path):
-        sys.exit(0)
+    # Priority 3: Inline XTTS-v2 (last resort, ~25s)
+    wav_path = output_path.rsplit(".", 1)[0] + ".wav"
+    if xtts_inline(text, wav_path):
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", wav_path, "-ar", "44100", "-ac", "1",
+             "-b:a", "128k", output_path],
+            capture_output=True, timeout=30
+        )
+        if os.path.exists(output_path):
+            sys.exit(0)
 
     print("All TTS methods failed", file=sys.stderr)
     sys.exit(1)
