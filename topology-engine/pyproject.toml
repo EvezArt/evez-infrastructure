@@ -1,0 +1,9 @@
+[project]
+name = "topology-engine"
+version = "1.0.0"
+description = "Spectral graph anomaly detection — find structural holes and hidden dependencies in directed networks via eigenvalue decomposition"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "mypy>=1.10"]

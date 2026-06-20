@@ -1,0 +1,18 @@
+{
+  "name": "eventspine",
+  "version": "1.0.0",
+  "description": "Append-only cryptographic event sourcing ledger with hash-chained JSONL storage, ring buffer batching, and state rehydration via event replay.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "node --test dist/test/*.test.js",
+    "lint": "tsc --noEmit"
+  },
+  "keywords": ["event-sourcing", "ledger", "cryptographic", "append-only", "jsonl"],
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "@types/node": "^22.0.0"
+  }
+}

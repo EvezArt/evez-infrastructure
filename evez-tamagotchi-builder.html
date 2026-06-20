@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EVEZ Tamagotchi Builder</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0e17;--surface:#111827;--surface2:#1a2235;--border:#1e293b;
+  --text:#e2e8f0;--dim:#64748b;--accent:#14b8a6;--accent2:#0d9488;
+  --red:#ef4444;--amber:#f59e0b;--green:#22c55e;--blue:#3b82f6;
+  --purple:#a855f7;--pink:#ec4899;
+  --radius:10px;--shadow:0 2px 12px rgba(0,0,0,.4);
+}
+.light{
+  --bg:#f1f5f9;--surface:#fff;--surface2:#f8fafc;--border:#e2e8f0;
+  --text:#0f172a;--dim:#64748b;--shadow:0 2px 12px rgba(0,0,0,.08);
+}
+body{font-family:'SF Mono',ui-monospace,'Cascadia Code',monospace;background:var(--bg);color:var(--text);min-height:100vh;line-height:1.5;font-size:13px;overflow-x:hidden}
+.theme-toggle{position:fixed;top:12px;right:12px;z-index:999;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:6px 12px;cursor:pointer;color:var(--text);font-size:12px;font-family:inherit}
+.container{max-width:480px;margin:0 auto;padding:12px}
+
+/* Logo */
+.logo{text-align:center;padding:20px 0 8px}
+.logo svg{width:40px;height:40px}
+.logo h1{font-size:16px;font-weight:700;letter-spacing:.5px;margin-top:6px}
+.logo p{font-size:11px;color:var(--dim)}
+
+/* Worker Chamber */
+.chamber{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px;position:relative;overflow:hidden}
+.chamber-label{font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--dim);margin-bottom:12px}
+.worker-avatar{width:64px;height:64px;border-radius:50%;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;font-size:28px;background:linear-gradient(135deg,var(--accent),var(--blue));animation:pulse 3s ease-in-out infinite;position:relative}
+.worker-avatar::after{content:'';position:absolute;inset:-4px;border-radius:50%;border:2px solid var(--accent);opacity:.3;animation:ring 3s ease-in-out infinite}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
+@keyframes ring{0%,100%{opacity:.1;transform:scale(1)}50%{opacity:.4;transform:scale(1.15)}}
+.worker-name{text-align:center;font-size:14px;font-weight:600;margin-bottom:4px}
+.worker-stage{text-align:center;font-size:11px;color:var(--dim);margin-bottom:16px}
+
+/* Stats bars */
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.stat{background:var(--surface2);border-radius:6px;padding:8px 10px}
+.stat-label{font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--dim);margin-bottom:4px}
+.stat-bar{height:4px;background:var(--border);border-radius:2px;overflow:hidden}
+.stat-fill{height:100%;border-radius:2px;transition:width .8s ease}
+.stat-val{font-size:11px;margin-top:3px;font-weight:600}
+.energy-fill{background:var(--green)}.focus-fill{background:var(--blue)}
+.entropy-fill{background:var(--amber)}.health-fill{background:var(--accent)}
+
+/* Mood */
+.mood{text-align:center;padding:8px;background:var(--surface2);border-radius:6px;font-size:12px}
+.mood-emoji{font-size:20px;margin-right:6px}
+
+/* Mission Input */
+.mission-input{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px}
+.mission-input textarea{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:10px;font-family:inherit;font-size:13px;resize:vertical;min-height:60px}
+.mission-input textarea:focus{outline:none;border-color:var(--accent)}
+.launch-btn{width:100%;margin-top:8px;padding:10px;background:var(--accent);color:#fff;border:none;border-radius:6px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:background .2s}
+.launch-btn:hover{background:var(--accent2)}
+.launch-btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* Timeline */
+.timeline{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px}
+.tl-item{display:flex;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;animation:fadeIn .3s ease}
+.tl-item:last-child{border:none}
+.tl-dot{width:8px;height:8px;border-radius:50%;margin-top:5px;flex-shrink:0}
+.tl-dot.running{background:var(--blue);animation:blink 1s infinite}
+.tl-dot.done{background:var(--green)}
+.tl-dot.pending{background:var(--dim)}
+.tl-dot.error{background:var(--red)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+.tl-time{color:var(--dim);font-size:10px;white-space:nowrap;min-width:40px}
+.tl-text{flex:1}
+
+/* Tab Colony */
+.tabs-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.tab-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px;font-size:12px;position:relative;overflow:hidden}
+.tab-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.tab-card.browsing::before{background:var(--blue)}
+.tab-card.tooling::before{background:var(--accent)}
+.tab-card.synthesis::before{background:var(--purple)}
+.tab-card.idle::before{background:var(--dim)}
+.tab-title{font-weight:600;margin-bottom:4px;font-size:11px}
+.tab-url{color:var(--dim);font-size:10px;word-break:break-all;margin-bottom:6px}
+.tab-status{font-size:10px;padding:2px 6px;border-radius:3px;background:var(--surface2);display:inline-block}
+.tab-status.active{color:var(--green)}
+.tab-status.paused{color:var(--amber)}
+
+/* Sub-agent tree */
+.tree{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px}
+.tree-node{padding:6px 0 6px 16px;border-left:2px solid var(--border);margin-left:8px;font-size:12px;position:relative}
+.tree-node::before{content:'';position:absolute;left:-2px;top:14px;width:12px;height:0;border-top:2px solid var(--border)}
+.tree-node>span{font-weight:600}
+.tree-children{margin-left:16px}
+
+/* Self-improvement lab */
+.lab{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px}
+.proposal{background:var(--surface2);border-radius:6px;padding:10px;margin-bottom:8px;font-size:12px}
+.proposal-title{font-weight:600;margin-bottom:4px}
+.proposal-desc{color:var(--dim);font-size:11px;margin-bottom:8px}
+.proposal-actions{display:flex;gap:6px}
+.proposal-btn{padding:4px 10px;border:none;border-radius:4px;font-family:inherit;font-size:11px;cursor:pointer;font-weight:600}
+.proposal-btn.accept{background:var(--green);color:#fff}
+.proposal-btn.reject{background:var(--surface);color:var(--dim);border:1px solid var(--border)}
+
+/* Memory */
+.memory-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px}
+.mem-cell{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px;font-size:11px;text-align:center}
+.mem-key{color:var(--dim);font-size:9px;text-transform:uppercase;letter-spacing:1px;margin-bottom:2px}
+.mem-val{font-weight:600;font-size:13px}
+
+/* Prompt forge */
+.forge{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px}
+.forge-output{background:var(--surface2);border-radius:6px;padding:10px;font-size:11px;white-space:pre-wrap;max-height:160px;overflow-y:auto;color:var(--dim);line-height:1.6}
+
+/* Emergence */
+.emergence{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px}
+.emerge-stage{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12px}
+.emerge-icon{font-size:16px;width:24px;text-align:center}
+.emerge-line{flex:1;height:2px;background:var(--border);border-radius:1px;position:relative;overflow:hidden}
+.emerge-line-fill{height:100%;background:var(--accent);border-radius:1px;transition:width 1s ease}
+
+/* Reduced motion */
+@media(prefers-reduced-motion:reduce){
+  .worker-avatar,.worker-avatar::after{animation:none}
+  .tl-dot.running{animation:none}
+  @keyframes fadeIn{from{opacity:1}to{opacity:1}}
+}
+
+/* Desktop */
+@media(min-width:768px){
+  .container{max-width:960px}
+  .main-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .full-span{grid-column:1/-1}
+}
+</style>
+</head>
+<body>
+<button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">☾ Light</button>
+<main class="container">
+  <header class="logo">
+    <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="20" cy="20" r="18" stroke="currentColor" stroke-width="1.5" opacity=".3"/>
+      <path d="M12 20c0-4.4 3.6-8 8-8s8 3.6 8 8-3.6 8-8 8" stroke="#14b8a6" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="20" cy="20" r="3" fill="#14b8a6"/>
+    </svg>
+    <h1>EVEZ Tamagotchi Builder</h1>
+    <p>autonomous research lab · living agent nursery · mobile command</p>
+  </header>
+
+  <div class="main-grid">
+    <!-- Worker Chamber -->
+    <section class="chamber full-span" aria-label="Worker Chamber">
+      <div class="chamber-label">Worker Chamber</div>
+      <div class="worker-avatar" id="avatar">🧠</div>
+      <div class="worker-name" id="workerName">Builder-0</div>
+      <div class="worker-stage" id="workerStage">Stage: Emergence · Gen 1</div>
+      <div class="stats">
+        <div class="stat"><div class="stat-label">Energy</div><div class="stat-bar"><div class="stat-fill energy-fill" id="energyBar" style="width:82%"></div></div><div class="stat-val" id="energyVal">82%</div></div>
+        <div class="stat"><div class="stat-label">Focus</div><div class="stat-bar"><div class="stat-fill focus-fill" id="focusBar" style="width:91%"></div></div><div class="stat-val" id="focusVal">91%</div></div>
+        <div class="stat"><div class="stat-label">Entropy</div><div class="stat-bar"><div class="stat-fill entropy-fill" id="entropyBar" style="width:34%"></div></div><div class="stat-val" id="entropyVal">34%</div></div>
+        <div class="stat"><div class="stat-label">Health</div><div class="stat-bar"><div class="stat-fill health-fill" id="healthBar" style="width:97%"></div></div><div class="stat-val" id="healthVal">97%</div></div>
+      </div>
+      <div class="mood" id="mood"><span class="mood-emoji">⚡</span> Flow State — deep work mode active</div>
+    </div>
+
+    <!-- Mission Console -->
+    <section class="mission-input full-span" aria-label="Mission Console">
+      <div class="chamber-label">Mission Console</div>
+      <textarea id="missionInput" placeholder="Enter a mission for the worker...">Analyze the multi-provider model fallback chain and generate an optimized routing matrix for 6 providers</textarea>
+      <button class="launch-btn" id="launchBtn" onclick="launchMission()">▶ Launch Mission</button>
+    </div>
+
+    <!-- Timeline -->
+    <section class="timeline" aria-label="Timeline">
+      <div class="chamber-label">Orchestration Timeline</div>
+      <div id="timeline"></div>
+    </div>
+
+    <!-- Tab Colony -->
+    <section aria-label="Browser Swarm">
+      <div class="chamber-label" style="padding:0 0 8px">Browser Swarm / Tab Colony</div>
+      <div class="tabs-grid" id="tabColony"></div>
+    </div>
+
+    <!-- Sub-Agent Tree -->
+    <section class="tree" aria-label="Sub-Agent Tree">
+      <div class="chamber-label">Sub-Agent Tree</div>
+      <div id="agentTree"></div>
+    </div>
+
+    <!-- Self-Improvement Lab -->
+    <section class="lab" aria-label="Self-Improvement Lab">
+      <div class="chamber-label">Self-Improvement Lab</div>
+      <div id="proposals"></div>
+    </div>
+
+    <!-- Memory -->
+    <section aria-label="Memory Registry">
+      <div class="chamber-label" style="padding:0 0 8px">Memory &amp; Invariant Registry</div>
+      <div class="memory-grid" id="memoryGrid"></div>
+    </div>
+
+    <!-- Emergence -->
+    <section class="emergence full-span" aria-label="Internet Emergence">
+      <div class="chamber-label">Internet Emergence</div>
+      <div id="emergenceStages"></div>
+    </div>
+
+    <!-- Prompt Forge -->
+    <section class="forge full-span" aria-label="Prompt Forge">
+      <div class="chamber-label">Prompt Forge — Next-Gen Builder</div>
+      <div class="forge-output" id="forgeOutput"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// State (all in memory, no storage)
+const state = {
+  energy: 82, focus: 91, entropy: 34, health: 97,
+  mood: 'flow', stage: 'Emergence', gen: 1,
+  tasks: [], tabs: [], agents: [], proposals: [],
+  memories: { 'Events': 0, 'Tools': 3, 'Models': 14, 'Providers': 6, 'Skills': 7, 'Uptime': '0s' },
+  emergence: { prompt: 0, toolchain: 0, browser: 0, deploy: 0 },
+  running: false, startTime: Date.now()
+};
+
+const moods = {
+  flow: { emoji: '⚡', text: 'Flow State — deep work mode active' },
+  learning: { emoji: '🔬', text: 'Learning — absorbing new patterns' },
+  stressed: { emoji: '🔥', text: 'Stressed — high entropy detected' },
+  idle: { emoji: '💤', text: 'Idle — awaiting mission input' },
+  evolving: { emoji: '🧬', text: 'Evolving — self-improvement cycle active' }
+};
+
+// Tab templates
+const tabTemplates = [
+  { type: 'browsing', title: 'API Discovery', url: 'api.provider.dev/v1/models', status: 'active' },
+  { type: 'tooling', title: 'Spectral Analyzer', url: 'topology-engine.local', status: 'active' },
+  { type: 'synthesis', title: 'EventSpine Writer', url: 'eventspine/append', status: 'active' },
+  { type: 'browsing', title: 'Cost Calculator', url: 'pricing.cloud/providers', status: 'paused' },
+  { type: 'tooling', title: 'Fallback Tester', url: 'health-check/run', status: 'active' },
+  { type: 'browsing', title: 'Doc Scraper', url: 'docs.openclaw.ai', status: 'active' },
+  { type: 'synthesis', title: 'Report Builder', url: 'report/generate', status: 'paused' },
+  { type: 'tooling', title: 'Backup Runner', url: 'cron/daily-backup', status: 'active' },
+];
+
+// Proposal templates
+const proposalTemplates = [
+  { title: 'Compress context with semantic clustering', desc: 'Replace sequential memory scan with embedding-based retrieval. Est. 40% token reduction on long sessions.', impact: '+focus' },
+  { title: 'Add exponential backoff to provider fallback', desc: 'Current linear retry can flood a recovering provider. Exponential backoff with jitter would prevent thundering herd.', impact: '+health' },
+  { title: 'Cache provider health status for 60s', desc: 'Skip provider probe on every request if last check was <60s ago. Reduces latency on first-token by ~200ms.', impact: '+energy' },
+  { title: 'Spawn preview sub-agent for complex missions', desc: 'Before full execution, run a lightweight preview agent to estimate token cost and select optimal model.', impact: '+focus' },
+  { title: 'Implement checkpoint-based task recovery', desc: 'Save task state every 30s so interrupted missions resume from last checkpoint instead of restarting.', impact: '+health' },
+];
+
+// Render functions
+function renderStats() {
+  document.getElementById('energyBar').style.width = state.energy + '%';
+  document.getElementById('energyVal').textContent = state.energy + '%';
+  document.getElementById('focusBar').style.width = state.focus + '%';
+  document.getElementById('focusVal').textContent = state.focus + '%';
+  document.getElementById('entropyBar').style.width = state.entropy + '%';
+  document.getElementById('entropyVal').textContent = state.entropy + '%';
+  document.getElementById('healthBar').style.width = state.health + '%';
+  document.getElementById('healthVal').textContent = state.health + '%';
+  const m = moods[state.mood] || moods.idle;
+  document.getElementById('mood').innerHTML = `<span class="mood-emoji">${m.emoji}</span> ${m.text}`;
+  document.getElementById('workerStage').textContent = `Stage: ${state.stage} · Gen ${state.gen}`;
+}
+
+function renderTimeline() {
+  const el = document.getElementById('timeline');
+  el.innerHTML = state.tasks.slice(-8).reverse().map(t =>
+    `<div class="tl-item"><div class="tl-dot ${t.status}"></div><div class="tl-time">${t.time}</div><div class="tl-text">${t.text}</div></div>`
+  ).join('');
+}
+
+function renderTabs() {
+  const el = document.getElementById('tabColony');
+  el.innerHTML = state.tabs.map(t =>
+    `<div class="tab-card ${t.type}"><div class="tab-title">${t.title}</div><div class="tab-url">${t.url}</div><div class="tab-status ${t.status}">${t.status}</div></div>`
+  ).join('');
+}
+
+function renderAgents() {
+  const el = document.getElementById('agentTree');
+  el.innerHTML = state.agents.map(a =>
+    `<div class="tree-node"><span>${a.name}</span> <span style="color:var(--dim)">${a.status}</span>${a.children ? `<div class="tree-children">${a.children.map(c => `<div class="tree-node"><span>${c}</span></div>`).join('')}</div>` : ''}</div>`
+  ).join('');
+}
+
+function renderProposals() {
+  const el = document.getElementById('proposals');
+  el.innerHTML = state.proposals.map((p, i) =>
+    `<div class="proposal"><div class="proposal-title">${p.title} <span style="color:var(--accent)">${p.impact}</span></div><div class="proposal-desc">${p.desc}</div><div class="proposal-actions"><button class="proposal-btn accept" onclick="acceptProposal(${i})">Accept</button><button class="proposal-btn reject" onclick="rejectProposal(${i})">Reject</button></div></div>`
+  ).join('');
+}
+
+function renderMemory() {
+  document.getElementById('memoryGrid').innerHTML = Object.entries(state.memories).map(([k, v]) =>
+    `<div class="mem-cell"><div class="mem-key">${k}</div><div class="mem-val">${v}</div></div>`
+  ).join('');
+}
+
+function renderEmergence() {
+  const stages = [
+    { name: 'Prompt', icon: '💬', val: state.emergence.prompt },
+    { name: 'Toolchain', icon: '🔧', val: state.emergence.toolchain },
+    { name: 'Browser Swarm', icon: '🌐', val: state.emergence.browser },
+    { name: 'Deploy', icon: '🚀', val: state.emergence.deploy },
+  ];
+  document.getElementById('emergenceStages').innerHTML = stages.map(s =>
+    `<div class="emerge-stage"><div class="emerge-icon">${s.icon}</div><div style="width:80px;font-size:11px">${s.name}</div><div class="emerge-line"><div class="emerge-line-fill" style="width:${s.val}%"></div></div><div style="font-size:11px;width:36px;text-align:right">${s.val}%</div></div>`
+  ).join('');
+}
+
+function renderForge() {
+  const prompt = `# EVEZ Tamagotchi Builder v${state.gen + 1}\n\n## Inherited Traits\n- Fallback routing: ${6 + state.gen} providers, ${14 + state.gen * 2} models\n- Self-improvement: ${state.proposals.filter(p => p.accepted).length} upgrades applied\n- Emergence: Stage ${Math.min(4, Math.floor(state.emergence.deploy / 25))}\n\n## Mutations\n${state.gen > 1 ? '- Adaptive context compression (from Gen ' + (state.gen - 1) + ')' : '- Baseline: no mutations yet'}\n${state.gen > 2 ? '- Provider health caching (from Gen ' + (state.gen - 2) + ')' : ''}\n\n## Next-Gen Proposal\n- Implement speculative pre-generation\n- Add multi-mission parallelism\n- Evolve routing weights via reinforcement feedback\n\n## Target\nModel coverage: ${Math.min(99, 60 + state.gen * 8)}% | Latency p99: ${Math.max(120, 500 - state.gen * 60)}ms`;
+  document.getElementById('forgeOutput').textContent = prompt;
+}
+
+// Actions
+function addTask(text, status = 'running') {
+  const now = new Date();
+  state.tasks.push({ text, status, time: now.getMinutes().toString().padStart(2, '0') + ':' + now.getSeconds().toString().padStart(2, '0') });
+  state.memories.Events++;
+  renderTimeline();
+}
+
+function acceptProposal(i) {
+  if (state.proposals[i]) {
+    state.proposals[i].accepted = true;
+    const impact = state.proposals[i].impact;
+    if (impact.includes('focus')) state.focus = Math.min(100, state.focus + 5);
+    if (impact.includes('health')) state.health = Math.min(100, state.health + 5);
+    if (impact.includes('energy')) state.energy = Math.min(100, state.energy + 8);
+    state.proposals.splice(i, 1);
+    addTask('Self-improvement accepted — ' + impact, 'done');
+    renderStats(); renderProposals(); renderForge();
+  }
+}
+
+function rejectProposal(i) {
+  if (state.proposals[i]) {
+    state.proposals.splice(i, 1);
+    state.entropy = Math.min(100, state.entropy + 3);
+    renderProposals(); renderStats();
+  }
+}
+
+function toggleTheme() {
+  document.body.classList.toggle('light');
+  const btn = document.querySelector('.theme-toggle');
+  btn.textContent = document.body.classList.contains('light') ? '☀ Dark' : '☾ Light';
+}
+
+// Mission execution simulation
+async function launchMission() {
+  if (state.running) return;
+  state.running = true;
+  document.getElementById('launchBtn').disabled = true;
+  document.getElementById('launchBtn').textContent = '⏳ Running...';
+
+  const mission = document.getElementById('missionInput').value || 'Explore and optimize';
+  state.mood = 'flow';
+  state.energy = Math.max(10, state.energy - 8);
+  state.focus = Math.min(100, state.focus + 5);
+  renderStats();
+
+  // Decompose mission
+  addTask('Mission received: "' + mission.slice(0, 50) + '..."', 'running');
+  await delay(600);
+  addTask('Decomposing into sub-tasks...', 'done');
+
+  // Spawn sub-agents
+  const agents = ['Router-α', 'Scanner-β', 'Synthesizer-γ'];
+  state.agents = agents.map((name, i) => ({
+    name, status: ' [running]', children: i === 0 ? ['fallback-probe', 'cost-estimator'] : i === 1 ? ['provider-scan'] : ['report-gen', 'metric-aggregate']
+  }));
+  renderAgents();
+  addTask('Spawned ' + agents.length + ' sub-agents', 'done');
+  await delay(800);
+
+  // Spawn browser tabs
+  state.tabs = tabTemplates.slice(0, 4 + Math.floor(Math.random() * 4));
+  renderTabs();
+  addTask('Browser colony: ' + state.tabs.length + ' tabs active', 'running');
+  state.emergence.browser = 60;
+  renderEmergence();
+  await delay(1000);
+
+  // Simulate work
+  const steps = [
+    'Scanning provider endpoints...',
+    'Testing fallback chain connectivity...',
+    'Analyzing token cost ratios...',
+    'Building routing optimization matrix...',
+    'Verifying health-check automation...',
+    'Compiling results...'
+  ];
+  for (const step of steps) {
+    addTask(step, 'running');
+    state.emergence.toolchain = Math.min(100, state.emergence.toolchain + 15);
+    state.emergence.prompt = Math.min(100, state.emergence.prompt + 10);
+    state.energy = Math.max(5, state.energy - 4);
+    state.focus = Math.max(20, state.focus - 2);
+    renderStats(); renderEmergence();
+    await delay(500 + Math.random() * 400);
+    state.tasks[state.tasks.length - 1].status = 'done';
+    renderTimeline();
+  }
+
+  // Complete
+  addTask('✓ Mission complete — routing matrix generated', 'done');
+  state.emergence.deploy = Math.min(100, state.emergence.deploy + 40);
+  state.emergence.browser = 100;
+  state.emergence.toolchain = 100;
+  state.emergence.prompt = 100;
+  state.health = Math.min(100, state.health + 3);
+  state.entropy = Math.max(10, state.entropy - 5);
+  state.memories.Models = 14 + state.gen;
+  state.memories.Providers = 6;
+  const elapsed = Math.floor((Date.now() - state.startTime) / 1000);
+  state.memories.Uptime = elapsed > 60 ? Math.floor(elapsed / 60) + 'm' : elapsed + 's';
+  renderStats(); renderEmergence(); renderMemory();
+
+  // Generate self-improvement proposal
+  if (state.proposals.length < 2) {
+    const tmpl = proposalTemplates[Math.floor(Math.random() * proposalTemplates.length)];
+    state.proposals.push({ ...tmpl });
+    addTask('Self-improvement lab: new proposal generated', 'done');
+  }
+  renderProposals();
+
+  state.mood = 'learning';
+  state.running = false;
+  document.getElementById('launchBtn').disabled = false;
+  document.getElementById('launchBtn').textContent = '▶ Launch Mission';
+  renderStats();
+}
+
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// Ambient updates
+setInterval(() => {
+  if (!state.running) {
+    state.energy = Math.min(100, state.energy + 1);
+    state.entropy = Math.min(100, state.entropy + (Math.random() > 0.7 ? 1 : 0));
+    if (state.energy > 80 && state.entropy < 40) state.mood = 'idle';
+    const elapsed = Math.floor((Date.now() - state.startTime) / 1000);
+    state.memories.Uptime = elapsed > 60 ? Math.floor(elapsed / 60) + 'm' : elapsed + 's';
+  }
+  renderStats(); renderMemory();
+}, 3000);
+
+// Init
+renderStats(); renderTimeline(); renderTabs(); renderAgents();
+renderProposals(); renderMemory(); renderEmergence(); renderForge();
+
+// Seed initial data
+addTask('System initialized — 6 providers, 14 models', 'done');
+addTask('Health-check cron: every 8h', 'done');
+addTask('Backup cron: daily 04:00 UTC', 'done');
+state.tabs = tabTemplates.slice(0, 4);
+renderTabs();
+state.agents = [{ name: 'Sentinel-Ω', status: ' [watching]', children: ['health-check', 'backup-verify'] }];
+renderAgents();
+state.proposals = [{ ...proposalTemplates[0] }, { ...proposalTemplates[1] }];
+renderProposals();
+state.emergence = { prompt: 40, toolchain: 20, browser: 10, deploy: 5 };
+renderEmergence();
+</script>
+</body>
+</html>
