@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://evez-os.ai/schemas/evez-run.schema.json",
+  "title": "EVEZ Run Record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["run_id", "actor", "intent", "inputs", "evidence_state", "started_at"],
+  "properties": {
+    "run_id": {"type": "string", "minLength": 1},
+    "parent_run_id": {"type": ["string", "null"]},
+    "actor": {"type": "string", "minLength": 1},
+    "intent": {"type": "string", "minLength": 1},
+    "inputs": {"type": "array", "items": {"type": "string"}},
+    "sources": {"type": "array", "items": {"type": "string"}},
+    "transforms": {"type": "array", "items": {"type": "string"}},
+    "tests": {"type": "array", "items": {"type": "string"}},
+    "result": {"type": ["object", "array", "string", "number", "boolean", "null"]},
+    "evidence_state": {
+      "type": "string",
+      "enum": ["VERIFIED","SUPPORTED","INFERRED","PROPOSED","UNKNOWN","STALE","CONTRADICTED","RETRACTED"]
+    },
+    "provider": {"type": ["string", "null"]},
+    "model": {"type": ["string", "null"]},
+    "started_at": {"type": "string", "format": "date-time"},
+    "finished_at": {"type": ["string", "null"], "format": "date-time"},
+    "input_sha256": {"type": ["string", "null"]},
+    "output_sha256": {"type": ["string", "null"]},
+    "metadata": {"type": "object"}
+  }
+}
