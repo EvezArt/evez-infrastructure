@@ -1,0 +1,69 @@
+version: 1
+
+system:
+  name: EVEZ
+  control_plane: evez-control
+  epistemic_rule: CLAIMED != MEASURED != REPLICATED != EXPLAINED
+  default_unknown_state: UNKNOWN
+
+providers:
+  github:
+    role: source_of_truth
+    account: EvezArt
+    capabilities:
+      - repositories
+      - commits
+      - issues
+      - pull_requests
+      - review
+  supabase:
+    role: durable_state
+    project_ref: vziaqxquzohqskesuxgz
+    region: us-west-2
+    capabilities:
+      - postgres
+      - logs
+      - edge_functions
+      - migrations
+  huggingface:
+    role: open_model_registry
+    account: evez420
+    capabilities:
+      - model_discovery
+      - dataset_discovery
+      - jobs
+  openai:
+    role: hosted_reasoning
+    organization_title: EVEZ
+    project_title: Default project
+    api_key_name: EVEZ-Control-Plane
+
+routing:
+  default:
+    primary: openai
+    fallback:
+      - huggingface
+      - local
+  reproducibility:
+    primary: local
+    fallback:
+      - huggingface
+      - openai
+  evidence:
+    required_fields:
+      - run_id
+      - intent
+      - inputs
+      - sources
+      - transforms
+      - tests
+      - result
+      - evidence_state
+
+secrets:
+  policy:
+    never_commit: true
+    never_client_expose:
+      - OPENAI_API_KEY
+      - SUPABASE_SERVICE_ROLE_KEY
+      - HF_WRITE_TOKEN
